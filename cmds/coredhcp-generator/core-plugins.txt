@@ -1,4 +1,5 @@
 github.com/coredhcp/coredhcp/plugins/autoconfigure
+github.com/coredhcp/coredhcp/plugins/classify
 github.com/coredhcp/coredhcp/plugins/dns
 github.com/coredhcp/coredhcp/plugins/file
 github.com/coredhcp/coredhcp/plugins/ipv6only

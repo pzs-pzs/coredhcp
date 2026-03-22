@@ -1,0 +1,103 @@
+# CoreDHCP Range Plugin Configuration with Class-Based Allocation
+#
+# This configuration shows how to allocate different IP ranges based on client classification.
+# The 'classify' plugin must be loaded before 'range' for this to work.
+
+# Database file for lease persistence
+database: "leases6.sqlite3"
+
+# Lease time duration
+lease_time: "3600s"  # 1 hour
+
+# Default range for clients that don't match any class
+default_range:
+  start: "2001:db8::100"
+  end: "2001:db8::1ff"
+
+# Class-specific ranges
+class_ranges:
+  # Android devices get addresses from this pool
+  - name: "android"
+    range:
+      start: "2001:db8:1000::100"
+      end: "2001:db8:1000::1ff"
+
+  # iOS devices get addresses from this pool
+  - name: "ios"
+    range:
+      start: "2001:db8:2000::100"
+      end: "2001:db8:2000::1ff"
+
+  # IoT devices (ESP32, Raspberry Pi, etc.)
+  - name: "iot"
+    range:
+      start: "2001:db8:3000::100"
+      end: "2001:db8:3000::1ff"
+
+  # Virtual machines
+  - name: "virtual"
+    range:
+      start: "2001:db8:4000::100"
+      end: "2001:db8:4000::1ff"
+
+  # === Relay Scenario: Branch office allocation by link-address ===
+  #
+  # When clients come through different relay agents (branch routers),
+  # they get classified by the router's link-address and allocated
+  # from the corresponding address pool.
+  #
+  # Classes are defined in classes.yaml:
+  #   - name: "branch1"
+  #     conditions:
+  #       link_address: ["2001:db8:1::1"]
+  #   - name: "branch2"
+  #     conditions:
+  #       link_address: ["2001:db8:2::1"]
+  #
+  # Network topology:
+  #   Branch 1 Router: 2001:db8:1::1  (link-address)
+  #   Branch 2 Router: 2001:db8:2::1  (link-address)
+  #   CoreDHCP Server: 2001:db8::100
+  #
+  # Clients from Branch 1 get: 2001:db8:1:100::/120
+  # Clients from Branch 2 get: 2001:db8:2:100::/120
+  # Clients from HQ get:     2001:db8::/120 (default)
+
+  - name: "branch1"
+    range:
+      start: "2001:db8:1:100::"
+      end: "2001:db8:1:100::ffff"
+
+  - name: "branch2"
+    range:
+      start: "2001:db8:2:100::"
+      end: "2001:db8:2:100::ffff"
+
+  - name: "branch3"
+    range:
+      start: "2001:db8:3:100::"
+      end: "2001:db8:3:100::ffff"
+
+  # === Combined: Branch + Device Type ===
+  #
+  # You can also combine branch with device type for more granular control:
+  #
+  # Classes in classes.yaml:
+  #   - name: "branch1-android"
+  #     conditions:
+  #       link_address: ["2001:db8:1::1"]
+  #       vendor_class_match: ["android*"]
+  #   - name: "branch1-iot"
+  #     conditions:
+  #       link_address: ["2001:db8:1::1"]
+  #       mac_prefix: ["B8:27:EB"]
+
+  - name: "branch1-android"
+    range:
+      start: "2001:db8:1:200::100"
+      end: "2001:db8:1:200::1ff"
+
+  - name: "branch1-iot"
+    range:
+      start: "2001:db8:1:300::100"
+      end: "2001:db8:1:300::1ff"

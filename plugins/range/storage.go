@@ -6,6 +6,7 @@ package rangeplugin
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -18,7 +19,10 @@ func loadDB(path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database (%T): %w", err, err)
 	}
-	if _, err := db.Exec("create table if not exists leases4 (mac string not null, ip string not null, expiry int, hostname string not null, primary key (mac, ip))"); err != nil {
+	if _, err := db.Exec("create table if not exists leases4 (mac TEXT not null, ip TEXT not null, expiry INTEGER, hostname TEXT not null, primary key (mac, ip))"); err != nil {
+		return nil, fmt.Errorf("table creation failed: %w", err)
+	}
+	if _, err := db.Exec("create table if not exists leases6 (duid TEXT not null, ip TEXT not null, expiry INTEGER, hostname TEXT not null, primary key (duid, ip))"); err != nil {
 		return nil, fmt.Errorf("table creation failed: %w", err)
 	}
 	return db, nil
@@ -58,6 +62,35 @@ func loadRecords(db *sql.DB) (map[string]*Record, error) {
 	return records, nil
 }
 
+// loadRecords6 loads the DHCPv6 Records map with records stored on
+// the specified database. Uses DUID as the client identifier.
+func loadRecords6(db *sql.DB) (map[string]*Record, error) {
+	rows, err := db.Query("select duid, ip, expiry, hostname from leases6")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query leases6 database: %w", err)
+	}
+	defer rows.Close()
+	var (
+		duid, ip, hostname string
+		expiry             int
+		records            = make(map[string]*Record)
+	)
+	for rows.Next() {
+		if err := rows.Scan(&duid, &ip, &expiry, &hostname); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		ipaddr := net.ParseIP(ip)
+		if ipaddr.To4() != nil {
+			return nil, fmt.Errorf("expected an IPv6 address, got: %v", ipaddr)
+		}
+		records[duid] = &Record{IP: ipaddr, expires: expiry, hostname: hostname}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed lease database row scanning: %w", err)
+	}
+	return records, nil
+}
+
 // saveIPAddress writes out a lease to storage
 func (p *PluginState) saveIPAddress(mac net.HardwareAddr, record *Record) error {
 	stmt, err := p.leasedb.Prepare(`insert or replace into leases4(mac, ip, expiry, hostname) values (?, ?, ?, ?)`)
@@ -85,6 +118,44 @@ func (p *PluginState) freeIPAddress(mac net.HardwareAddr, record *Record) error 
 	defer stmt.Close()
 	if _, err := stmt.Exec(
 		mac.String(),
+		record.IP.String(),
+	); err != nil {
+		return fmt.Errorf("record delete failed: %w", err)
+	}
+	return nil
+}
+
+// saveIPAddress6 writes out an IPv6 lease to storage
+func (p *PluginState) saveIPAddress6(duid []byte, record *Record) error {
+	stmt, err := p.leasedb.Prepare(`insert or replace into leases6(duid, ip, expiry, hostname) values (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("statement preparation failed: %w", err)
+	}
+	defer stmt.Close()
+	// Use hex encoding for consistent representation (lowercase with leading zeros)
+	duidStr := hex.EncodeToString(duid)
+	if _, err := stmt.Exec(
+		duidStr,
+		record.IP.String(),
+		record.expires,
+		record.hostname,
+	); err != nil {
+		return fmt.Errorf("record insert/update failed: %w", err)
+	}
+	return nil
+}
+
+// freeIPAddress6 removes an IPv6 lease from storage
+func (p *PluginState) freeIPAddress6(duid []byte, record *Record) error {
+	stmt, err := p.leasedb.Prepare(`delete from leases6 where duid = ? and ip = ?`)
+	if err != nil {
+		return fmt.Errorf("statement preparation failed: %w", err)
+	}
+	defer stmt.Close()
+	// Use hex encoding for consistent representation (lowercase with leading zeros)
+	duidStr := hex.EncodeToString(duid)
+	if _, err := stmt.Exec(
+		duidStr,
 		record.IP.String(),
 	); err != nil {
 		return fmt.Errorf("record delete failed: %w", err)

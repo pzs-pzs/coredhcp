@@ -1,0 +1,166 @@
+# CoreDHCP Classify Plugin Configuration Example
+#
+# This configuration file defines client classes for classification based on
+# various DHCPv6 and DHCPv4 options.
+#
+# Place this file in /etc/coredhcp/ or specify the path in the config:
+#   server6:
+#     plugins:
+#       - classify: "/path/to/classes.yaml"
+#       - range: "leases6.sqlite3 2001:db8::1 2001:db8::1000 3600s"
+
+# Classes are evaluated in order - the first matching class wins
+classes:
+  # Class for Android devices
+  - name: "android"
+    conditions:
+      vendor_class_match:
+        - "android*"
+        - "android-dhcp-*"
+
+  # Class for Apple/iOS devices
+  - name: "ios"
+    conditions:
+      vendor_class_match:
+        - "apple*"
+      arch_type:
+        - 32  # ARM architecture
+
+  # Class for Windows devices
+  - name: "windows"
+    conditions:
+      vendor_class:
+        - "MSFT"
+        - "Microsoft"
+
+  # Class for specific vendor equipment
+  - name: "cisco"
+    conditions:
+      vendor_class_match:
+        - "cisco*"
+      mac_prefix:
+        - "00:00:0C:CC:DD"
+        - "00:1B:D5:00:11"
+
+  # Class for IoT devices based on MAC OUI
+  - name: "iot-esp"
+    conditions:
+      mac_prefix:
+        - "84:CC:A8"  # Espressif (ESP32)
+        - "DC:4F:22"  # Espressif (ESP32-S2)
+
+  # Class for premium clients (based on DUID prefix)
+  - name: "premium"
+    conditions:
+      duid_prefix:
+        - "00010001"  # DUID-LLT type with specific prefix
+        - "00030001"  # DUID-LL type with specific prefix
+
+  # Class for specific devices by exact DUID
+  - name: "special-device"
+    conditions:
+      duid_exact:
+        - "0001000123456789ABCD"  # Exact DUID match
+      mac_exact:
+        - "aa:bb:cc:dd:ee:ff"
+
+  # Class for network printers
+  - name: "printers"
+    conditions:
+      vendor_class_match:
+        - "hp*"
+        - "canon*"
+        - "epson*"
+        - "brother*"
+
+  # Class for VMware/VirtualBox guests
+  - name: "virtual"
+    conditions:
+      mac_prefix:
+        - "00:0C:29"  # VMware
+        - "00:50:56"  # VMware
+        - "08:00:27"  # VirtualBox
+        - "52:54:00"  # QEMU/KVM
+
+  # Class for test/lab devices
+  - name: "lab"
+    conditions:
+      mac_prefix:
+        - "02:42"     # Docker
+        - "B8:27:EB"  # Raspberry Pi
+
+  # Class for specific user class
+  - name: "pxe-client"
+    conditions:
+      user_class:
+        - "PXEClient"
+        - "pxeclient"
+
+  # Class for specific architecture (e.g., ARM64 servers)
+  - name: "arm64-servers"
+    conditions:
+      arch_type:
+        - 182  # ARM64 (0xB6)
+
+  # Class based on Interface ID (useful for multi-NIC systems)
+  - name: "interface-specific"
+    conditions:
+      interface_id:
+        - "0000abcd"  # Interface ID in hex
+        - "00001234"
+
+  # Class for Relay Agent scenarios - classify by relay's link-address
+  # This is useful for multi-branch networks where each branch has a different router
+  - name: "branch1"
+    conditions:
+      link_address:
+        - "2001:db8:1::1"  # Branch 1 router's link-address
+
+  - name: "branch2"
+    conditions:
+      link_address:
+        - "2001:db8:2::1"  # Branch 2 router's link-address
+
+  - name: "branch3"
+    conditions:
+      link_address:
+        - "2001:db8:3::1"  # Branch 3 router's link-address
+
+  # Class using Remote ID (relay agent identifier)
+  - name: "provider-relay"
+    conditions:
+      remote_id:
+        - "00000001"  # Enterprise Number + relay data
+
+  # Combined conditions: branch + device type
+  - name: "branch1-android"
+    conditions:
+      link_address:
+        - "2001:db8:1::1"
+      vendor_class_match:
+        - "android*"
+
+  - name: "branch1-iot"
+    conditions:
+      link_address:
+        - "2001:db8:1::1"
+      mac_prefix:
+        - "B8:27:EB"  # Raspberry Pi
+        - "DC:4F:22"  # ESP32
+
+# Advanced example with simple conditions:
+# classes:
+#   - name: "android"
+#     conditions:
+#       vendor_class: ["android"]
+#
+#   - name: "test-mac"
+#     conditions:
+#       mac_exact: ["aa:bb:cc:dd:ee:ff"]
+#
+#   - name: "test-prefix"
+#     conditions:
+#       mac_prefix: ["02:42"]
+#
+# Note: vendor_class_match uses wildcard matching (* for any characters)
+#       vendor_class uses exact matching
